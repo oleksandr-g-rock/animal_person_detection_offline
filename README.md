@@ -1,127 +1,146 @@
 # 👁 Camera Detection Zone
 
-Прототип веб-застосунку для розпізнавання людей і тварин в зоні спостереження камери через попіксельну сегментацію (DeepLabV3).
+A single-file web app that uses the device camera and pixel-level segmentation (DeepLabV3) to detect people and animals inside a user-defined zone.
+
+> **UI language:** Ukrainian. Button labels are in Ukrainian — see the [Usage](#usage) section for a translation.
 
 ---
 
-## Можливості
+## Features
 
-| Функція | Опис |
+| Feature | Description |
 |---|---|
-| 🎯 **Сегментація** | Попіксельна маска людей і тварин (не bounding box) |
-| 📦 **Зона спостереження** | Перетягуй і змінюй розмір зони на екрані |
-| 💾 **Автозбереження** | Зона зберігається в localStorage |
-| 🔊 **Звуковий сигнал** | Beep при виявленні об'єкта в зоні |
-| 📳 **Вібрація** | Телефон вібрує при спрацюванні |
-| 🔒 **Wake Lock** | Екран не гасне під час роботи |
-| ⚡ **Троттлінг** | Аналіз кожен 4-й кадр — економія батареї |
-| ⏱ **Лічильник** | Час роботи, кількість алертів, FPS |
-| 📜 **Історія** | Лог спрацювань з часом і тривалістю |
-| 📡 **Офлайн** | Service Worker кешує все після першого запуску |
-| 📱 **PWA** | Можна додати на головний екран |
+| 🎯 **Pixel segmentation** | Per-pixel mask for people and animals — no bounding boxes |
+| 📦 **Detection zone** | Drag and resize the zone directly on screen |
+| 💾 **Auto-save** | Zone position is persisted in `localStorage` |
+| 🔊 **Audio alert** | Beep sound when a target enters the zone |
+| 📳 **Vibration** | Phone vibrates on alert (mobile only) |
+| 🔒 **Wake Lock** | Screen stays on while the app is running |
+| ⚡ **Throttling** | Inference runs every 4th frame to save battery |
+| ⏱ **Stats** | Uptime, alert count, and live FPS display |
+| 📜 **History log** | Timestamped log of each detection event with duration |
 
-## Запуск
+---
 
-### Варіант 1: Локальний сервер (рекомендовано)
+## Setup
+
+### Option 1: Open directly in Chrome
+
+Double-click `index.html` or drag it into Chrome. An internet connection is required on the **first launch** to download the MediaPipe WASM runtime and the DeepLabV3 model (~8 MB total). Both are cached by the browser afterwards.
+
+> Camera access requires a [secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts). Opening via `file://` works in Chrome. For other browsers, use Option 2.
+
+### Option 2: Local HTTP server (recommended for phones)
 
 ```bash
 cd person-detection
 python3 -m http.server 8000
 ```
 
-Відкрий на телефоні (в тій же Wi-Fi мережі):
+Then open on your phone (same Wi-Fi network):
 
 ```
-http://<IP-комп'ютера>:8000
+http://<your-computer-IP>:8000
 ```
 
-> Щоб дізнатись IP: `ifconfig | grep inet` або `ipconfig getifaddr en0`
+To find your IP: `ipconfig getifaddr en0` (macOS) or `ip route get 1` (Linux).
 
-### Варіант 2: HTTPS через ngrok
+### Option 3: HTTPS via ngrok (for camera on non-Chrome browsers)
 
 ```bash
 ngrok http 8000
 ```
 
-Відкрий HTTPS-посилання від ngrok на телефоні.
+Open the HTTPS link from ngrok on your phone.
 
-### Перший запуск
+### First launch checklist
 
-1. Відкрий сторінку з інтернетом — модель (~8MB) завантажиться і закешується
-2. Прийми дисклеймер
-3. Дозволь камеру
-4. Готово — тепер працює навіть офлайн
+1. Open the page with an internet connection — model downloads and caches automatically
+2. Accept the disclaimer
+3. Allow camera access
+4. Done
 
-## Використання
+---
 
-- **Зона** — натисни "Зона" щоб перетягнути/змінити область спостереження
-- **Лог** — натисни "Лог" щоб побачити історію спрацювань
-- **Скинути** — повертає зону до позиції за замовчуванням
+## Usage
 
-## Розпізнавані об'єкти
-
-| Клас | Іконка |
+| Button (Ukrainian) | Action |
 |---|---|
-| Людина | 🧑 |
-| Птах | 🐾 |
-| Кіт | 🐾 |
-| Корова | 🐾 |
-| Собака | 🐾 |
-| Кінь | 🐾 |
-| Вівця | 🐾 |
+| **Зона** | Toggle zone editing — drag to move, drag corners/edges to resize |
+| **Лог** | Toggle the history log panel |
+| **Скинути** | Reset zone to default position |
 
-## Технології
+---
 
-- **MediaPipe Tasks Vision** — WASM inference
-- **DeepLabV3** — модель сегментації (Pascal VOC, 21 клас)
-- **Web Audio API** — звукові сигнали
-- **Screen Wake Lock API** — екран не гасне
-- **Service Worker** — офлайн кеш
-- **Canvas 2D** — рендеринг масок
+## Detected classes
 
-## Структура
+| Class | Icon |
+|---|---|
+| Person | 🧑 |
+| Bird | 🐾 |
+| Cat | 🐾 |
+| Cow | 🐾 |
+| Dog | 🐾 |
+| Horse | 🐾 |
+| Sheep | 🐾 |
+
+Classes are based on the Pascal VOC label set used by DeepLabV3.
+
+---
+
+## Tech stack
+
+| Technology | Role |
+|---|---|
+| [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision/image_segmenter) | WASM-based on-device inference |
+| DeepLabV3 (float32, Pascal VOC) | Semantic segmentation model |
+| Web Audio API | Alert beep synthesis |
+| Screen Wake Lock API | Prevents display sleep |
+| Canvas 2D | Mask rendering onto video overlay |
+
+---
+
+## File structure
 
 ```
 person-detection/
-├── index.html      ← Весь UI + логіка
-├── sw.js           ← Service Worker для офлайн
-├── manifest.json   ← PWA маніфест
-└── README.md       ← Цей файл
+├── index.html   ← Entire app — UI, logic, styles in one file
+└── README.md    ← This file
 ```
 
 ---
 
-## ⚠️ ЮРИДИЧНИЙ ДИСКЛЕЙМЕР
+## ⚠️ Legal disclaimer
 
-**УВАГА: Цей застосунок є ЕКСПЕРИМЕНТАЛЬНИМ ПРОТОТИПОМ.**
+**THIS APP IS AN EXPERIMENTAL PROTOTYPE.**
 
-Він створений виключно для тестових, навчальних та демонстраційних цілей.
+It is intended solely for testing, educational, and demonstration purposes.
 
-### Обмеження відповідальності
+### Limitation of liability
 
-1. **НЕ Є СЕРТИФІКОВАНОЮ СИСТЕМОЮ БЕЗПЕКИ.** Цей застосунок не пройшов жодної сертифікації, тестування або валідації як система безпеки, система допомоги водієві (ADAS) або система запобігання зіткненням.
+1. **NOT A CERTIFIED SAFETY SYSTEM.** This app has not undergone any certification, testing, or validation as a safety system, driver-assistance system (ADAS), or collision-prevention system.
 
-2. **НЕ ЗАМІНЮЄ УВАГУ ВОДІЯ.** Використання цього застосунку жодним чином не знімає з водія обов'язку стежити за дорожньою обстановкою. Водій несе повну відповідальність за безпеку руху.
+2. **DOES NOT REPLACE DRIVER ATTENTION.** Use of this app in no way relieves the driver of the obligation to monitor road conditions. The driver bears full responsibility for road safety at all times.
 
-3. **НЕ ГАРАНТУЄ РОЗПІЗНАВАННЯ.** Модель машинного навчання може:
-   - Пропускати об'єкти (false negative)
-   - Хибно спрацьовувати (false positive)
-   - Працювати з затримкою або некоректно при поганому освітленні, русі, вібрації
+3. **DOES NOT GUARANTEE DETECTION.** The machine learning model may:
+   - Miss objects (false negatives)
+   - Trigger incorrectly (false positives)
+   - Perform with latency or inaccurately in poor lighting, during motion, or under vibration
 
-4. **НЕ ПРИЗНАЧЕНИЙ ДЛЯ РЕАЛЬНИХ ДОРОЖНІХ УМОВ.** Застосунок не тестувався і не призначений для використання під час реального водіння або в будь-яких ситуаціях, де від нього може залежати безпека людей.
+4. **NOT DESIGNED FOR REAL ROAD CONDITIONS.** The app has not been tested for and is not intended for use during actual driving or in any situation where human safety may depend on it.
 
-5. **ВИКОРИСТАННЯ НА ВЛАСНИЙ РИЗИК.** Розробник не несе жодної відповідальності за:
-   - Шкоду здоров'ю або життю
-   - Матеріальні збитки
-   - Порушення правил дорожнього руху
-   - Будь-які інші наслідки використання
+5. **USE AT YOUR OWN RISK.** The developer accepts no liability for:
+   - Injury or loss of life
+   - Property damage
+   - Traffic violations
+   - Any other consequences arising from use of this app
 
-6. **ВІДПОВІДНІСТЬ ЗАКОНОДАВСТВУ.** Використання камери телефону під час водіння може бути заборонено законодавством вашої країни. Переконайтесь у відповідності місцевим законам перед використанням.
+6. **LEGAL COMPLIANCE.** Using a phone camera while driving may be prohibited by law in your country. Ensure compliance with local regulations before use.
 
-### Ліцензія
+### License
 
-Цей прототип надається "як є" (AS IS) без будь-яких гарантій, явних або неявних.
+This prototype is provided "AS IS" without any warranty, express or implied.
 
 ---
 
-*Прототип. Не для продакшн використання.*
+*Prototype. Not for production use.*
