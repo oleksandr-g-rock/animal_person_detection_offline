@@ -8,6 +8,7 @@
 ![License](https://img.shields.io/badge/license-AS%20IS-red?style=flat-square)
 
 A single-file web app that uses the device camera and pixel-level segmentation (DeepLabV3) to detect people and animals inside a user-defined zone.
+https://oleksandr-g-rock.github.io/animal_person_detection_offline/
 
 > **UI language:** Ukrainian. Button labels are in Ukrainian — see the [Usage](#usage) section for a translation.
 
