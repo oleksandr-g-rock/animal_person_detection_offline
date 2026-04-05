@@ -1,5 +1,12 @@
 # 👁 Camera Detection Zone
 
+![JavaScript](https://img.shields.io/badge/JavaScript-ES2020-f7df1e?style=flat-square&logo=javascript&logoColor=black)
+![Single File](https://img.shields.io/badge/app-single%20file-4f46e5?style=flat-square)
+![MediaPipe](https://img.shields.io/badge/MediaPipe-DeepLabV3-00897b?style=flat-square)
+![Mobile Ready](https://img.shields.io/badge/mobile-ready-22c55e?style=flat-square)
+![No Dependencies](https://img.shields.io/badge/dependencies-none-lightgrey?style=flat-square)
+![License](https://img.shields.io/badge/license-AS%20IS-red?style=flat-square)
+
 A single-file web app that uses the device camera and pixel-level segmentation (DeepLabV3) to detect people and animals inside a user-defined zone.
 
 > **UI language:** Ukrainian. Button labels are in Ukrainian — see the [Usage](#usage) section for a translation.
