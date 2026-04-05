@@ -197,10 +197,16 @@
     /* History panel */
     #history-panel {
       display: none;
-      margin-top: 12px; padding-top: 12px;
+      margin-top: 8px; padding-top: 8px;
       border-top: 1px solid rgba(255,255,255,.08);
       max-height: 120px;
       overflow-y: auto;
+    }
+
+    @media (max-width: 600px) {
+      #history-panel { max-height: 72px; margin-top: 5px; padding-top: 5px; }
+      .history-title { font-size: 10px; margin-bottom: 4px; }
+      .history-entry { font-size: 11px; padding: 2px 0; }
     }
 
     #history-panel.visible { display: block; }
@@ -397,8 +403,8 @@
     const PERSON_IDX = 15;
     const ANIMAL_INDICES = new Set([3, 8, 10, 12, 13, 17]);
     const MIN_PIXELS = 25;
-    const SEGMENT_INTERVAL = 4; // Сегментація кожен N-й кадр (троттлінг для батареї)
-    const BEEP_COOLDOWN = 2000; // Мінімум мс між звуковими сигналами
+    const SEGMENT_INTERVAL = 4; // Run segmentation every Nth frame (throttle for battery)
+    const BEEP_COOLDOWN = 2000; // Minimum ms between audio alerts
 
     // ========================= DOM =========================
 
@@ -503,7 +509,7 @@
       osc.start();
       osc.stop(audioCtx.currentTime + dur / 1000);
 
-      // Вібрація
+      // Vibration
       if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
     }
 
