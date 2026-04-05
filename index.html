@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Camera Detection Zone</title>
+  <meta name="theme-color" content="#08111f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap");
+
+    :root {
+      --bg: #08111f;
+      --panel: rgba(8, 17, 31, 0.68);
+      --panel-border: rgba(255, 255, 255, 0.14);
+      --accent: #3dd9b4;
+      --accent-strong: #1eb796;
+      --text: #f4f7fb;
+      --muted: rgba(244, 247, 251, 0.72);
+      --danger: #ff5d73;
+      --animal: #ffb84d;
+      --neutral: #5ab6ff;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.34);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top, rgba(61,217,180,.16), transparent 28%),
+        radial-gradient(circle at bottom, rgba(90,182,255,.14), transparent 34%),
+        var(--bg);
+      color: var(--text);
+      font-family: "Space Grotesk", system-ui, sans-serif;
+    }
+
+    body.editing { cursor: move; }
+
+    #app { position: relative; width: 100vw; height: 100vh; isolation: isolate; }
+
+    #video {
+      position: fixed; inset: 0;
+      width: 100vw; height: 100vh;
+      object-fit: cover; background: #000;
+    }
+
+    #video-fx {
+      position: fixed; inset: 0; z-index: 2; pointer-events: none;
+      background:
+        linear-gradient(to bottom, rgba(5,10,18,.5), transparent 22%, transparent 74%, rgba(5,10,18,.42)),
+        radial-gradient(circle at center, transparent 58%, rgba(4,8,16,.18));
+    }
+
+    #overlay {
+      position: fixed; inset: 0; z-index: 8; pointer-events: none;
+    }
+
+    #zone-layer { position: fixed; inset: 0; z-index: 12; pointer-events: none; }
+
+    #zone-box {
+      position: absolute;
+      border: 2px solid rgba(61,217,180,.9);
+      border-radius: 24px;
+      background: rgba(61,217,180,.08);
+      box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 0 0 9999px rgba(4,8,16,.08);
+      transition: box-shadow .2s, border-color .2s, background .2s;
+    }
+
+    body.editing #zone-box {
+      pointer-events: auto;
+      border-style: dashed;
+      background: rgba(61,217,180,.12);
+      box-shadow: 0 0 0 1px rgba(255,255,255,.1) inset, 0 0 0 9999px rgba(4,8,16,.24);
+    }
+
+    .zone-caption {
+      position: absolute; top: -18px; left: 16px;
+      padding: 8px 12px;
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 999px;
+      background: rgba(8,17,31,.84);
+      font-size: 12px; font-weight: 700; letter-spacing: .04em;
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      pointer-events: none;
+    }
+
+    .zone-handle {
+      position: absolute; width: 24px; height: 24px;
+      border-radius: 999px;
+      border: 2px solid rgba(255,255,255,.96);
+      background: var(--accent);
+      box-shadow: 0 8px 18px rgba(0,0,0,.28);
+      opacity: 0; transform: scale(.7);
+      transition: opacity .18s, transform .18s;
+      touch-action: none;
+    }
+
+    body.editing .zone-handle { opacity: 1; transform: scale(1); pointer-events: auto; }
+
+    .zone-handle[data-handle="nw"] { left: -12px; top: -12px; cursor: nwse-resize; }
+    .zone-handle[data-handle="ne"] { right: -12px; top: -12px; cursor: nesw-resize; }
+    .zone-handle[data-handle="sw"] { left: -12px; bottom: -12px; cursor: nesw-resize; }
+    .zone-handle[data-handle="se"] { right: -12px; bottom: -12px; cursor: nwse-resize; }
+
+    #alerts {
+      position: fixed;
+      top: calc(env(safe-area-inset-top, 0px) + 18px);
+      left: 50%; transform: translateX(-50%);
+      z-index: 18;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      pointer-events: none;
+    }
+
+    .alert-badge {
+      display: none; align-items: center; gap: 10px;
+      padding: 10px 18px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(8,17,31,.8);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      font-size: clamp(22px,3.4vw,34px); font-weight: 700; white-space: nowrap;
+    }
+
+    .alert-badge span:last-child {
+      font-size: clamp(11px,1.6vw,14px);
+      text-transform: uppercase; letter-spacing: .12em;
+      color: var(--muted);
+    }
+
+    #hud {
+      position: fixed;
+      left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+      transform: translateX(-50%);
+      z-index: 20;
+      width: min(92vw, 740px);
+      padding: 18px 18px 16px;
+      border: 1px solid var(--panel-border);
+      border-radius: 26px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    }
+
+    .hud-top {
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 16px;
+    }
+
+    .hud-copy { min-width: 0; }
+
+    .hud-kicker {
+      display: inline-flex; align-items: center; gap: 8px;
+      margin-bottom: 8px;
+      color: var(--accent); font-size: 11px; font-weight: 700;
+      letter-spacing: .18em; text-transform: uppercase;
+    }
+
+    .hud-kicker::before {
+      content: ""; width: 8px; height: 8px; border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 18px rgba(61,217,180,.7);
+    }
+
+    #hud-title {
+      margin-bottom: 4px;
+      font-size: clamp(18px,2vw,24px); font-weight: 700; line-height: 1.1;
+    }
+
+    #hud-subtitle {
+      color: var(--muted); font-size: 13px; line-height: 1.45;
+    }
+
+    .hud-actions {
+      display: flex; align-items: center; justify-content: flex-end;
+      gap: 10px; flex-wrap: wrap;
+    }
+
+    /* Stats row */
+    .hud-stats {
+      display: flex; gap: 16px; flex-wrap: wrap;
+      margin-top: 12px; padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      font-size: 12px; color: var(--muted);
+    }
+
+    .hud-stats .stat {
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    .hud-stats .stat-val {
+      color: var(--text); font-weight: 700; font-size: 14px;
+    }
+
+    /* History panel */
+    #history-panel {
+      display: none;
+      margin-top: 12px; padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    #history-panel.visible { display: block; }
+
+    .history-title {
+      font-size: 11px; font-weight: 700; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 8px;
+    }
+
+    .history-entry {
+      font-size: 12px; color: var(--muted); padding: 3px 0;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+    }
+
+    .history-entry:last-child { border-bottom: 0; }
+
+    .history-entry .he-time { color: var(--text); font-weight: 500; }
+    .history-entry .he-person { color: var(--danger); }
+    .history-entry .he-animal { color: var(--animal); }
+
+    button {
+      appearance: none; border: 0; border-radius: 16px;
+      padding: 13px 16px; font: inherit; font-size: 14px; font-weight: 700;
+      cursor: pointer; touch-action: manipulation;
+      transition: transform .15s, filter .15s, background .15s;
+    }
+    button:hover { transform: translateY(-1px); filter: brightness(1.04); }
+    button:active { transform: translateY(0); }
+
+    #edit-zone-btn {
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      color: #03110e;
+    }
+
+    #reset-zone-btn, #history-btn {
+      background: rgba(255,255,255,.08); color: var(--text);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    #status {
+      position: fixed;
+      left: 50%; top: calc(env(safe-area-inset-top, 0px) + 18px);
+      transform: translateX(-50%);
+      z-index: 24; max-width: min(92vw, 580px);
+      padding: 12px 16px; border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(8,17,31,.84);
+      box-shadow: var(--shadow);
+      font-size: 14px; line-height: 1.45; text-align: center;
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    }
+
+    #status[data-tone="error"] {
+      border-color: rgba(255,93,115,.45);
+      color: #ffe4e8;
+      background: rgba(72,12,23,.88);
+    }
+
+    /* Disclaimer modal */
+    #disclaimer-overlay {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(4,8,16,.88);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    }
+
+    #disclaimer-overlay.hidden { display: none; }
+
+    #disclaimer-box {
+      max-width: 520px; width: 100%;
+      padding: 28px 24px 20px;
+      border: 1px solid rgba(255,93,115,.3);
+      border-radius: 24px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    }
+
+    #disclaimer-box h2 {
+      font-size: 20px; margin-bottom: 14px;
+      color: var(--danger);
+    }
+
+    #disclaimer-box p {
+      font-size: 13px; line-height: 1.6; color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    #disclaimer-box .warn-list {
+      list-style: none; padding: 0; margin: 12px 0 18px;
+    }
+
+    #disclaimer-box .warn-list li {
+      font-size: 13px; color: var(--text); padding: 5px 0;
+    }
+
+    #disclaimer-box .warn-list li::before {
+      content: "⚠️ "; margin-right: 4px;
+    }
+
+    #accept-btn {
+      width: 100%;
+      background: linear-gradient(135deg, var(--danger), #e0364f);
+      color: #fff; font-size: 15px;
+      padding: 15px;
+    }
+
+    @media (max-width: 720px) {
+      .hud-top { grid-template-columns: 1fr; }
+      .hud-actions { justify-content: stretch; }
+      .hud-actions button { flex: 1 1 120px; }
+      .alert-badge { font-size: clamp(18px,5vw,28px); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <video id="video" autoplay playsinline muted></video>
+    <div id="video-fx"></div>
+    <canvas id="overlay"></canvas>
+
+    <div id="zone-layer">
+      <div id="zone-box">
+        <div class="zone-caption">Активна зона</div>
+        <div class="zone-handle" data-handle="nw"></div>
+        <div class="zone-handle" data-handle="ne"></div>
+        <div class="zone-handle" data-handle="sw"></div>
+        <div class="zone-handle" data-handle="se"></div>
+      </div>
+    </div>
+
+    <div id="alerts">
+      <div id="person-alert" class="alert-badge"><span>⚠️🧑</span><span>Person In Zone</span></div>
+      <div id="animal-alert" class="alert-badge"><span>⚠️🐾</span><span>Animal In Zone</span></div>
+    </div>
+
+    <div id="hud">
+      <div class="hud-top">
+        <div class="hud-copy">
+          <div class="hud-kicker">Live Detection</div>
+          <div id="hud-title">Підготовка...</div>
+          <div id="hud-subtitle">Сегментація працює попіксельно — тільки реальний силует в зоні.</div>
+        </div>
+        <div class="hud-actions">
+          <button id="edit-zone-btn" type="button">Зона</button>
+          <button id="history-btn" type="button">Лог</button>
+          <button id="reset-zone-btn" type="button">Скинути</button>
+        </div>
+      </div>
+      <div class="hud-stats">
+        <div class="stat">⏱ <span class="stat-val" id="stat-time">00:00</span></div>
+        <div class="stat">🧑 <span class="stat-val" id="stat-person">0</span></div>
+        <div class="stat">🐾 <span class="stat-val" id="stat-animal">0</span></div>
+        <div class="stat">📡 <span class="stat-val" id="stat-fps">—</span> fps</div>
+      </div>
+      <div id="history-panel">
+        <div class="history-title">Історія спрацювань</div>
+        <div id="history-list"></div>
+      </div>
+    </div>
+
+    <div id="status">Завантаження бібліотек...</div>
+
+    <!-- Disclaimer modal -->
+    <div id="disclaimer-overlay">
+      <div id="disclaimer-box">
+        <h2>⚠️ Юридичний дисклеймер</h2>
+        <p>Цей застосунок є <strong>експериментальним прототипом</strong> і створений виключно для тестових та демонстраційних цілей.</p>
+        <ul class="warn-list">
+          <li>НЕ є сертифікованою системою безпеки</li>
+          <li>НЕ замінює увагу водія на дорозі</li>
+          <li>НЕ гарантує розпізнавання всіх об'єктів</li>
+          <li>Може давати хибні спрацювання або пропускати об'єкти</li>
+          <li>НЕ призначений для використання в реальних дорожніх умовах</li>
+          <li>Розробник НЕ несе відповідальності за будь-які наслідки використання</li>
+        </ul>
+        <p>Натискаючи «Прийняти», ви підтверджуєте що розумієте обмеження прототипу і використовуєте його на власний ризик.</p>
+        <button id="accept-btn" type="button">Прийняти та продовжити</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { ImageSegmenter, FilesetResolver } from
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+    // ========================= CONFIG =========================
+
+    const STORAGE_KEY = "person-detection.zone.v1";
+    const DISCLAIMER_KEY = "person-detection.disclaimer-accepted";
+    const DEFAULT_ZONE = { x: 0.18, y: 0.24, w: 0.64, h: 0.52 };
+
+    const PERSON_IDX = 15;
+    const ANIMAL_INDICES = new Set([3, 8, 10, 12, 13, 17]);
+    const MIN_PIXELS = 25;
+    const SEGMENT_INTERVAL = 4; // Сегментація кожен N-й кадр (троттлінг для батареї)
+    const BEEP_COOLDOWN = 2000; // Мінімум мс між звуковими сигналами
+
+    // ========================= DOM =========================
+
+    const video = document.getElementById("video");
+    const overlay = document.getElementById("overlay");
+    const ctx = overlay.getContext("2d");
+    const zoneBox = document.getElementById("zone-box");
+    const personAlert = document.getElementById("person-alert");
+    const animalAlert = document.getElementById("animal-alert");
+    const hudTitle = document.getElementById("hud-title");
+    const hudSubtitle = document.getElementById("hud-subtitle");
+    const editZoneBtn = document.getElementById("edit-zone-btn");
+    const resetZoneBtn = document.getElementById("reset-zone-btn");
+    const historyBtn = document.getElementById("history-btn");
+    const historyPanel = document.getElementById("history-panel");
+    const historyList = document.getElementById("history-list");
+    const statusEl = document.getElementById("status");
+    const statTime = document.getElementById("stat-time");
+    const statPerson = document.getElementById("stat-person");
+    const statAnimal = document.getElementById("stat-animal");
+    const statFps = document.getElementById("stat-fps");
+    const disclaimerOverlay = document.getElementById("disclaimer-overlay");
+    const acceptBtn = document.getElementById("accept-btn");
+
+    // ========================= STATE =========================
+
+    let segmenter = null;
+    let isEditing = false;
+    let zone = loadZone();
+    let dragState = null;
+    let lastMask = null;
+    let offCanvas = null;
+    let offCtx = null;
+
+    // Throttle
+    let frameCount = 0;
+    let lastVideoTime = -1;
+
+    // Audio
+    let audioCtx = null;
+    let lastBeepTime = 0;
+
+    // Wake Lock
+    let wakeLock = null;
+
+    // Stats
+    const startedAt = Date.now();
+    let totalPersonAlerts = 0;
+    let totalAnimalAlerts = 0;
+
+    // History
+    const historyEntries = [];
+    const MAX_HISTORY = 50;
+
+    // Current alert tracking (for duration logging)
+    let currentPersonStart = 0;
+    let currentAnimalStart = 0;
+    let wasPerson = false;
+    let wasAnimal = false;
+
+    // FPS counter
+    let fpsFrames = 0;
+    let fpsPrev = performance.now();
+
+    // ========================= DISCLAIMER =========================
+
+    function checkDisclaimer() {
+      return new Promise(resolve => {
+        if (localStorage.getItem(DISCLAIMER_KEY) === "1") {
+          disclaimerOverlay.classList.add("hidden");
+          resolve();
+          return;
+        }
+        acceptBtn.addEventListener("click", () => {
+          localStorage.setItem(DISCLAIMER_KEY, "1");
+          disclaimerOverlay.classList.add("hidden");
+          resolve();
+        }, { once: true });
+      });
+    }
+
+    // ========================= AUDIO BEEP =========================
+
+    function beep(freq, dur) {
+      const now = performance.now();
+      if (now - lastBeepTime < BEEP_COOLDOWN) return;
+      lastBeepTime = now;
+
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === "suspended") audioCtx.resume();
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "square";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur / 1000);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur / 1000);
+
+      // Вібрація
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    }
+
+    // ========================= WAKE LOCK =========================
+
+    async function requestWakeLock() {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLock = await navigator.wakeLock.request("screen");
+          wakeLock.addEventListener("release", () => { wakeLock = null; });
+        }
+      } catch { /* ignore */ }
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && !wakeLock) requestWakeLock();
+    });
+
+    // ========================= ZONE (localStorage) =========================
+
+    function clamp(v, mn, mx) { return Math.min(Math.max(v, mn), mx); }
+
+    function normalizeZone(z) {
+      const w = clamp(z.w, 0.14, 1);
+      const h = clamp(z.h, 0.14, 1);
+      return { x: clamp(z.x, 0, 1 - w), y: clamp(z.y, 0, 1 - h), w, h };
+    }
+
+    function loadZone() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return { ...DEFAULT_ZONE };
+        const p = JSON.parse(raw);
+        if (typeof p.x !== "number" || typeof p.y !== "number" ||
+            typeof p.w !== "number" || typeof p.h !== "number")
+          return { ...DEFAULT_ZONE };
+        return normalizeZone(p);
+      } catch { return { ...DEFAULT_ZONE }; }
+    }
+
+    function saveZone() { localStorage.setItem(STORAGE_KEY, JSON.stringify(zone)); }
+
+    function vpSize() { return { w: window.innerWidth, h: window.innerHeight }; }
+
+    function zoneToPixels(z) {
+      z = z || zone;
+      const vp = vpSize();
+      return { left: z.x * vp.w, top: z.y * vp.h, width: z.w * vp.w, height: z.h * vp.h };
+    }
+
+    function pixelsToZone(r) {
+      const vp = vpSize();
+      return normalizeZone({ x: r.left / vp.w, y: r.top / vp.h, w: r.width / vp.w, h: r.height / vp.h });
+    }
+
+    function updateZoneEl() {
+      const r = zoneToPixels();
+      zoneBox.style.left = r.left + "px";
+      zoneBox.style.top = r.top + "px";
+      zoneBox.style.width = r.width + "px";
+      zoneBox.style.height = r.height + "px";
+    }
+
+    // ========================= OVERLAY DRAWING =========================
+
+    function resizeOverlay() {
+      const ratio = devicePixelRatio || 1;
+      const vp = vpSize();
+      overlay.width = Math.round(vp.w * ratio);
+      overlay.height = Math.round(vp.h * ratio);
+      overlay.style.width = vp.w + "px";
+      overlay.style.height = vp.h + "px";
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      updateZoneEl();
+      drawFrame();
+    }
+
+    function getCoverRect() {
+      const vp = vpSize();
+      const vw = video.videoWidth || 1, vh = video.videoHeight || 1;
+      const vR = vw / vh, cR = vp.w / vp.h;
+      let dw, dh, dx, dy;
+      if (vR > cR) { dh = vp.h; dw = vp.h * vR; dx = (vp.w - dw) / 2; dy = 0; }
+      else { dw = vp.w; dh = vp.w / vR; dx = 0; dy = (vp.h - dh) / 2; }
+      return { dw, dh, dx, dy };
+    }
+
+    function roundRect(x, y, w, h, radius) {
+      const r = Math.min(radius, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function drawZone() {
+      const vp = vpSize();
+      const r = zoneToPixels();
+      if (isEditing) {
+        ctx.fillStyle = "rgba(4,8,16,.26)";
+        ctx.beginPath();
+        ctx.rect(0, 0, vp.w, vp.h);
+        ctx.rect(r.left, r.top, r.width, r.height);
+        ctx.fill("evenodd");
+      }
+      ctx.save();
+      roundRect(r.left, r.top, r.width, r.height, 24);
+      ctx.fillStyle = isEditing ? "rgba(61,217,180,.08)" : "rgba(61,217,180,.04)";
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.setLineDash(isEditing ? [10, 8] : []);
+      ctx.strokeStyle = isEditing ? "rgba(61,217,180,.9)" : "rgba(61,217,180,.55)";
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ========================= MASK RENDERING =========================
+
+    function drawFrame() {
+      const vp = vpSize();
+      ctx.clearRect(0, 0, vp.w, vp.h);
+
+      let personIn = false, animalIn = false;
+
+      if (lastMask) {
+        const { data, w: mw, h: mh } = lastMask;
+
+        if (!offCanvas || offCanvas.width !== mw || offCanvas.height !== mh) {
+          offCanvas = document.createElement("canvas");
+          offCanvas.width = mw;
+          offCanvas.height = mh;
+          offCtx = offCanvas.getContext("2d", { willReadFrequently: true });
+        }
+
+        const imgData = offCtx.createImageData(mw, mh);
+        const d = imgData.data;
+
+        const c = getCoverRect();
+        const zr = zoneToPixels();
+        const zl = (zr.left - c.dx) / c.dw * mw;
+        const zt = (zr.top - c.dy) / c.dh * mh;
+        const zri = (zr.left + zr.width - c.dx) / c.dw * mw;
+        const zb = (zr.top + zr.height - c.dy) / c.dh * mh;
+
+        let personCount = 0, animalCount = 0;
+
+        for (let i = 0; i < data.length; i++) {
+          const cls = data[i];
+          const isPerson = cls === PERSON_IDX;
+          const isAnimal = ANIMAL_INDICES.has(cls);
+          if (!isPerson && !isAnimal) continue;
+
+          const x = i % mw;
+          const y = (i / mw) | 0;
+          const inZone = x >= zl && x < zri && y >= zt && y < zb;
+
+          if (inZone) {
+            if (isPerson) personCount++;
+            else animalCount++;
+          }
+
+          const px = i * 4;
+          if (isPerson) {
+            d[px] = 255; d[px + 1] = 93; d[px + 2] = 115;
+            d[px + 3] = inZone ? 150 : 30;
+          } else {
+            d[px] = 255; d[px + 1] = 184; d[px + 2] = 77;
+            d[px + 3] = inZone ? 150 : 30;
+          }
+        }
+
+        offCtx.putImageData(imgData, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(offCanvas, 0, 0, mw, mh, c.dx, c.dy, c.dw, c.dh);
+
+        personIn = personCount >= MIN_PIXELS;
+        animalIn = animalCount >= MIN_PIXELS;
+      }
+
+      drawZone();
+
+      // --- Alerts + sound + history ---
+      personAlert.style.display = personIn ? "flex" : "none";
+      animalAlert.style.display = animalIn ? "flex" : "none";
+
+      const now = Date.now();
+
+      // Person alert transitions
+      if (personIn && !wasPerson) {
+        currentPersonStart = now;
+        totalPersonAlerts++;
+        statPerson.textContent = totalPersonAlerts;
+        beep(880, 300);
+      }
+      if (!personIn && wasPerson) {
+        addHistoryEntry("🧑 Людина", currentPersonStart, now);
+      }
+      wasPerson = personIn;
+
+      // Animal alert transitions
+      if (animalIn && !wasAnimal) {
+        currentAnimalStart = now;
+        totalAnimalAlerts++;
+        statAnimal.textContent = totalAnimalAlerts;
+        beep(660, 400);
+      }
+      if (!animalIn && wasAnimal) {
+        addHistoryEntry("🐾 Тварина", currentAnimalStart, now);
+      }
+      wasAnimal = animalIn;
+
+      if (segmenter) {
+        const parts = [];
+        if (personIn) parts.push("🧑 Людина");
+        if (animalIn) parts.push("🐾 Тварина");
+        hudTitle.textContent = parts.length
+          ? "В зоні: " + parts.join(", ")
+          : "Зона чиста";
+      }
+    }
+
+    // ========================= HISTORY =========================
+
+    function pad2(n) { return n < 10 ? "0" + n : "" + n; }
+
+    function formatTime(ts) {
+      const d = new Date(ts);
+      return pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+    }
+
+    function formatDuration(ms) {
+      const s = Math.round(ms / 1000);
+      if (s < 60) return s + " сек";
+      return Math.floor(s / 60) + " хв " + (s % 60) + " сек";
+    }
+
+    function addHistoryEntry(type, start, end) {
+      const entry = { type, start, end };
+      historyEntries.unshift(entry);
+      if (historyEntries.length > MAX_HISTORY) historyEntries.pop();
+      renderHistory();
+    }
+
+    function renderHistory() {
+      historyList.innerHTML = "";
+      for (const e of historyEntries) {
+        const div = document.createElement("div");
+        div.className = "history-entry";
+        const cls = e.type.includes("Людина") ? "he-person" : "he-animal";
+        div.innerHTML = `<span class="he-time">${formatTime(e.start)}</span> — `
+          + `<span class="${cls}">${e.type}</span> — ${formatDuration(e.end - e.start)}`;
+        historyList.appendChild(div);
+      }
+    }
+
+    // ========================= STATS TIMER =========================
+
+    function updateStats() {
+      const elapsed = Date.now() - startedAt;
+      const s = Math.floor(elapsed / 1000);
+      const m = Math.floor(s / 60);
+      statTime.textContent = pad2(m) + ":" + pad2(s % 60);
+    }
+
+    setInterval(updateStats, 1000);
+
+    function updateFps() {
+      const now = performance.now();
+      const dt = now - fpsPrev;
+      if (dt >= 1000) {
+        statFps.textContent = Math.round(fpsFrames * 1000 / dt);
+        fpsFrames = 0;
+        fpsPrev = now;
+      }
+    }
+
+    // ========================= STATUS =========================
+
+    let statusTimer = null;
+    function showStatus(msg, tone, autoHide) {
+      statusEl.textContent = msg;
+      statusEl.dataset.tone = tone || "info";
+      statusEl.style.display = "block";
+      if (statusTimer) clearTimeout(statusTimer);
+      if (autoHide > 0) {
+        statusTimer = setTimeout(() => { statusEl.style.display = "none"; }, autoHide);
+      }
+    }
+
+    // ========================= EDITING =========================
+
+    function setEditing(v) {
+      isEditing = v;
+      document.body.classList.toggle("editing", v);
+      editZoneBtn.textContent = v ? "Готово" : "Зона";
+      hudSubtitle.textContent = v
+        ? "Перетягуй рамку або кути. Збереження — автоматичне."
+        : "Сегментація працює попіксельно — тільки реальний силует в зоні.";
+      drawFrame();
+    }
+
+    // ========================= DRAG =========================
+
+    function startDrag(ev, mode) {
+      if (!isEditing) return;
+      ev.preventDefault();
+      const r = zoneToPixels();
+      dragState = {
+        mode, sx: ev.clientX, sy: ev.clientY,
+        sr: { left: r.left, top: r.top, right: r.left + r.width, bottom: r.top + r.height }
+      };
+    }
+
+    function onMove(ev) {
+      if (!dragState) return;
+      const vp = vpSize();
+      const minW = Math.max(vp.w * 0.14, 90);
+      const minH = Math.max(vp.h * 0.14, 90);
+      const dx = ev.clientX - dragState.sx, dy = ev.clientY - dragState.sy;
+      let l = dragState.sr.left, t = dragState.sr.top, r = dragState.sr.right, b = dragState.sr.bottom;
+
+      if (dragState.mode === "move") {
+        const bw = r - l, bh = b - t;
+        l = clamp(l + dx, 0, vp.w - bw); t = clamp(t + dy, 0, vp.h - bh);
+        r = l + bw; b = t + bh;
+      } else {
+        if (dragState.mode.includes("n")) t += dy;
+        if (dragState.mode.includes("s")) b += dy;
+        if (dragState.mode.includes("w")) l += dx;
+        if (dragState.mode.includes("e")) r += dx;
+        l = clamp(l, 0, vp.w - minW); t = clamp(t, 0, vp.h - minH);
+        r = clamp(r, minW, vp.w); b = clamp(b, minH, vp.h);
+        if (r - l < minW) { if (dragState.mode.includes("w")) l = r - minW; else r = l + minW; }
+        if (b - t < minH) { if (dragState.mode.includes("n")) t = b - minH; else b = t + minH; }
+        l = clamp(l, 0, vp.w - minW); t = clamp(t, 0, vp.h - minH);
+        r = clamp(r, l + minW, vp.w); b = clamp(b, t + minH, vp.h);
+      }
+
+      zone = pixelsToZone({ left: l, top: t, width: r - l, height: b - t });
+      saveZone(); updateZoneEl(); drawFrame();
+    }
+
+    function onUp() {
+      if (!dragState) return;
+      dragState = null;
+      saveZone();
+      showStatus("Зону збережено.", "info", 1200);
+    }
+
+    zoneBox.addEventListener("pointerdown", ev => {
+      if (ev.target.classList.contains("zone-handle")) return;
+      startDrag(ev, "move");
+    });
+    for (const h of zoneBox.querySelectorAll(".zone-handle")) {
+      h.addEventListener("pointerdown", ev => startDrag(ev, h.dataset.handle));
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+
+    editZoneBtn.addEventListener("click", () => {
+      setEditing(!isEditing);
+      if (isEditing) showStatus("Тягни рамку або кути. Натисни 'Готово' коли все ок.", "info");
+      else showStatus("Зону зафіксовано.", "info", 1200);
+    });
+
+    resetZoneBtn.addEventListener("click", () => {
+      zone = { ...DEFAULT_ZONE };
+      saveZone(); updateZoneEl(); drawFrame();
+      showStatus("Зону скинуто.", "info", 1400);
+    });
+
+    historyBtn.addEventListener("click", () => {
+      historyPanel.classList.toggle("visible");
+    });
+
+    window.addEventListener("resize", resizeOverlay);
+    resizeOverlay();
+    updateZoneEl();
+
+    // ========================= CAMERA =========================
+
+    async function startCamera() {
+      showStatus("Запуск камери...", "info");
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+      video.srcObject = stream;
+      await new Promise(ok => { video.onloadedmetadata = ok; });
+      await video.play();
+      showStatus("Камера активна. Завантаження моделі...", "info");
+    }
+
+    // ========================= MEDIAPIPE SEGMENTER =========================
+
+    async function loadSegmenter() {
+      showStatus("Завантаження моделі сегментації...", "info");
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+      segmenter = await ImageSegmenter.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/image_segmenter/deeplab_v3/float32/1/deeplab_v3.tflite",
+          delegate: "GPU"
+        },
+        outputCategoryMask: true,
+        outputConfidenceMasks: false,
+        runningMode: "VIDEO"
+      });
+      showStatus("Модель готова! Сегментація працює.", "info", 1500);
+      hudTitle.textContent = "Зона чиста";
+    }
+
+    // ========================= SEGMENT LOOP (THROTTLED) =========================
+
+    function segmentLoop() {
+      if (!segmenter || video.readyState < 2 || video.paused) {
+        requestAnimationFrame(segmentLoop);
+        return;
+      }
+
+      frameCount++;
+      fpsFrames++;
+      updateFps();
+
+      if (video.currentTime !== lastVideoTime && frameCount % SEGMENT_INTERVAL === 0) {
+        lastVideoTime = video.currentTime;
+        const result = segmenter.segmentForVideo(video, performance.now());
+        if (result.categoryMask) {
+          const mask = result.categoryMask;
+          lastMask = {
+            data: new Uint8Array(mask.getAsUint8Array()),
+            w: mask.width,
+            h: mask.height
+          };
+        }
+        drawFrame();
+      }
+
+      requestAnimationFrame(segmentLoop);
+    }
+
+    // ========================= MAIN =========================
+
+    try {
+      await checkDisclaimer();
+      await startCamera();
+      await requestWakeLock();
+      await loadSegmenter();
+      requestAnimationFrame(segmentLoop);
+    } catch (err) {
+      console.error(err);
+      const help = window.isSecureContext
+        ? err.message
+        : "Для камери відкрий через localhost або HTTPS.";
+      showStatus("Помилка: " + help, "error");
+      hudTitle.textContent = "Не вдалось запустити";
+      hudSubtitle.textContent = help;
+    }
+  </script>
+</body>
+</html>
